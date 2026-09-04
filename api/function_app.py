@@ -19,73 +19,6 @@ from shared.storage_client import StorageClient
 
 app = func.FunctionApp()
 
-
-@app.function_name(name="DebugVerify")
-@app.route(route="_debug/verify", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
-def debug_verify(req: func.HttpRequest) -> func.HttpResponse:
-    """TEMPORARY diagnostic endpoint - remove once the 403 root cause is confirmed."""
-    import jwt as jwt_lib
-    import hashlib
-    import socket
-    from shared.jwt_utils import JWT_SECRET, JWT_ALGORITHM
-
-    token = (req.headers.get('Authorization') or '').replace('Bearer ', '')
-    info = {
-        "pyjwt_version": getattr(jwt_lib, "__version__", "unknown"),
-        "algorithm": JWT_ALGORITHM,
-        "secret_len": len(JWT_SECRET) if JWT_SECRET else 0,
-        "secret_present": bool(JWT_SECRET),
-        "secret_fingerprint": hashlib.sha256(JWT_SECRET.encode()).hexdigest()[:12] if JWT_SECRET else None,
-        "instance_hostname": socket.gethostname(),
-        "token_received": bool(token),
-    }
-    try:
-        self_signed = jwt_lib.encode({"self_test": True}, JWT_SECRET, algorithm=JWT_ALGORITHM)
-        jwt_lib.decode(self_signed, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        info["self_roundtrip"] = "success"
-    except Exception as e:
-        info["self_roundtrip"] = f"failed: {type(e).__name__}: {str(e)}"
-    if token:
-        try:
-            payload = jwt_lib.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            info["decode_result"] = "success"
-            info["payload"] = payload
-        except Exception as e:
-            info["decode_result"] = "failed"
-            info["error_type"] = type(e).__name__
-            info["error_message"] = str(e)
-
-        # Manually recompute the HMAC-SHA256 signature, bypassing jwt.decode() entirely,
-        # to isolate whether this is a PyJWT-specific issue or a genuine byte-level mismatch.
-        import hmac as hmac_lib
-        import base64
-        try:
-            header_b64, payload_b64, sig_b64 = token.split('.')
-            signing_input = f"{header_b64}.{payload_b64}".encode()
-
-            def b64url_decode(s):
-                padded = s + '=' * (-len(s) % 4)
-                return base64.urlsafe_b64decode(padded)
-
-            def b64url_encode(b):
-                return base64.urlsafe_b64encode(b).rstrip(b'=').decode()
-
-            expected_sig = hmac_lib.new(JWT_SECRET.encode(), signing_input, hashlib.sha256).digest()
-            expected_sig_b64 = b64url_encode(expected_sig)
-            actual_sig_bytes = b64url_decode(sig_b64)
-            info["manual_hmac_check"] = {
-                "signatures_match": hmac_lib.compare_digest(expected_sig, actual_sig_bytes),
-                "expected_sig_b64": expected_sig_b64,
-                "actual_sig_b64": sig_b64,
-                "decoded_header": b64url_decode(header_b64).decode(errors='replace'),
-                "decoded_payload": b64url_decode(payload_b64).decode(errors='replace'),
-            }
-        except Exception as e:
-            info["manual_hmac_check"] = f"error: {type(e).__name__}: {str(e)}"
-            info["error_message"] = str(e)
-    return func.HttpResponse(json.dumps(info, default=str), mimetype="application/json", status_code=200)
-
-
 # Initialize repository and service
 MONGO_CONNECTION_STRING = os.getenv('MONGODB_CONNECTION_STRING')
 if not MONGO_CONNECTION_STRING:
@@ -127,7 +60,7 @@ def create_election(req: func.HttpRequest) -> func.HttpResponse:
     """Create a new election (Admin only)"""
     try:
         # Verify admin token
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
         
@@ -221,7 +154,7 @@ def update_election(req: func.HttpRequest) -> func.HttpResponse:
     """Update an election (Admin only)"""
     try:
         # Verify admin token
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
         
@@ -260,7 +193,7 @@ def update_election(req: func.HttpRequest) -> func.HttpResponse:
 def open_nominations(req: func.HttpRequest) -> func.HttpResponse:
     """Allow candidates to select their seats again (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -291,7 +224,7 @@ def activate_election(req: func.HttpRequest) -> func.HttpResponse:
     """Activate an election (Admin only)"""
     try:
         # Verify admin token
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
         
@@ -322,7 +255,7 @@ def close_election(req: func.HttpRequest) -> func.HttpResponse:
     """Close an election (Admin only)"""
     try:
         # Verify admin token
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
         
@@ -353,7 +286,7 @@ def close_election(req: func.HttpRequest) -> func.HttpResponse:
 def delete_election(req: func.HttpRequest) -> func.HttpResponse:
     """Delete an election and its related data (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -385,7 +318,7 @@ def delete_election(req: func.HttpRequest) -> func.HttpResponse:
 def create_position(req: func.HttpRequest) -> func.HttpResponse:
     """Create a position/seat for an election (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -445,7 +378,7 @@ def get_positions(req: func.HttpRequest) -> func.HttpResponse:
 def update_position(req: func.HttpRequest) -> func.HttpResponse:
     """Update a position/seat's name, region or description (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -476,7 +409,7 @@ def update_position(req: func.HttpRequest) -> func.HttpResponse:
 def delete_position(req: func.HttpRequest) -> func.HttpResponse:
     """Delete a position/seat (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -531,7 +464,7 @@ def get_candidates(req: func.HttpRequest) -> func.HttpResponse:
 def update_candidate(req: func.HttpRequest) -> func.HttpResponse:
     """Update any field on a candidate (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -579,7 +512,7 @@ def update_candidate(req: func.HttpRequest) -> func.HttpResponse:
 def delete_candidate(req: func.HttpRequest) -> func.HttpResponse:
     """Delete a candidate and its related votes (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -609,7 +542,7 @@ def delete_candidate(req: func.HttpRequest) -> func.HttpResponse:
 def get_my_candidate_profile(req: func.HttpRequest) -> func.HttpResponse:
     """Get the candidate profile linked to the signed-in candidate account"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -635,7 +568,7 @@ def get_my_candidate_profile(req: func.HttpRequest) -> func.HttpResponse:
 def update_my_candidate_profile(req: func.HttpRequest) -> func.HttpResponse:
     """Let a signed-in candidate edit their own photo, bio and profile URL"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -662,7 +595,7 @@ def update_my_candidate_profile(req: func.HttpRequest) -> func.HttpResponse:
 def upload_my_candidate_photo(req: func.HttpRequest) -> func.HttpResponse:
     """Upload a photo for the signed-in candidate to Azure Blob Storage"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -709,7 +642,7 @@ def upload_my_candidate_photo(req: func.HttpRequest) -> func.HttpResponse:
 def upload_my_campaign_media(req: func.HttpRequest) -> func.HttpResponse:
     """Upload a campaign image or video for the signed-in candidate's media gallery"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -765,7 +698,7 @@ def upload_my_campaign_media(req: func.HttpRequest) -> func.HttpResponse:
 def delete_my_campaign_media(req: func.HttpRequest) -> func.HttpResponse:
     """Remove a campaign image or video from the signed-in candidate's media gallery"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -799,7 +732,7 @@ def delete_my_campaign_media(req: func.HttpRequest) -> func.HttpResponse:
 def get_users(req: func.HttpRequest) -> func.HttpResponse:
     """List user accounts, optionally filtered by role (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -834,7 +767,7 @@ def get_users(req: func.HttpRequest) -> func.HttpResponse:
 def create_user(req: func.HttpRequest) -> func.HttpResponse:
     """Create a voter or candidate account directly (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -879,7 +812,7 @@ def create_user(req: func.HttpRequest) -> func.HttpResponse:
 def update_user(req: func.HttpRequest) -> func.HttpResponse:
     """Update a user's name, email or role (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -922,7 +855,7 @@ def update_user(req: func.HttpRequest) -> func.HttpResponse:
 def delete_user(req: func.HttpRequest) -> func.HttpResponse:
     """Delete a user account (Admin only)"""
     try:
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
 
@@ -955,7 +888,7 @@ def cast_vote(req: func.HttpRequest) -> func.HttpResponse:
     """Cast a vote"""
     try:
         # Verify user token
-        token = req.headers.get('Authorization')
+        token = req.headers.get('X-Auth-Token')
         if not token:
             return error_response("Missing authorization token", 401)
         
@@ -1072,10 +1005,6 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
 
         token = generate_token(user_id, user['email'], role)
 
-        import hashlib
-        import socket
-        from shared.jwt_utils import JWT_SECRET
-
         return success_response({
             "token": token,
             "user": {
@@ -1083,9 +1012,7 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
                 "email": user['email'],
                 "name": user.get('name'),
                 "role": role
-            },
-            "_debug_secret_fingerprint": hashlib.sha256(JWT_SECRET.encode()).hexdigest()[:12],
-            "_debug_instance_hostname": socket.gethostname()
+            }
         })
 
     except Exception as e:

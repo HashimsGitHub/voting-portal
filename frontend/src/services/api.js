@@ -1,8 +1,12 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
+// Azure Static Web Apps' managed Functions integration reserves the standard
+// "Authorization" header for its own internal service-to-service auth and
+// overwrites whatever the client sends, so the app's JWT is carried in a
+// custom header instead.
 const getAuthHeader = () => {
   const token = localStorage.getItem('token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return token ? { 'X-Auth-Token': token } : {};
 };
 
 // Parses the response body even on non-2xx status, and throws using the
