@@ -5,6 +5,22 @@ const getAuthHeader = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+// Parses the response body even on non-2xx status, and throws using the
+// backend's own error message (falling back to a generic one) instead of
+// masking the real reason with a hardcoded string.
+const parseOrThrow = async (response, fallbackMessage) => {
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  if (!response.ok) {
+    throw new Error((data && data.error) || fallbackMessage);
+  }
+  return data;
+};
+
 export const apiService = {
   // ==================== ELECTIONS ====================
   
@@ -13,16 +29,14 @@ export const apiService = {
     const response = await fetch(url, {
       headers: { 'Content-Type': 'application/json' }
     });
-    if (!response.ok) throw new Error('Failed to fetch elections');
-    return response.json();
+    return parseOrThrow(response, 'Failed to fetch elections');
   },
 
   getElectionDetails: async (electionId) => {
     const response = await fetch(`${API_BASE_URL}/elections/${electionId}`, {
       headers: { 'Content-Type': 'application/json' }
     });
-    if (!response.ok) throw new Error('Failed to fetch election details');
-    return response.json();
+    return parseOrThrow(response, 'Failed to fetch election details');
   },
 
   createElection: async (data) => {
@@ -34,8 +48,7 @@ export const apiService = {
       },
       body: JSON.stringify(data)
     });
-    if (!response.ok) throw new Error('Failed to create election');
-    return response.json();
+    return parseOrThrow(response, 'Failed to create election');
   },
 
   updateElection: async (electionId, data) => {
@@ -47,8 +60,7 @@ export const apiService = {
       },
       body: JSON.stringify(data)
     });
-    if (!response.ok) throw new Error('Failed to update election');
-    return response.json();
+    return parseOrThrow(response, 'Failed to update election');
   },
 
   openNominations: async (electionId) => {
@@ -70,8 +82,7 @@ export const apiService = {
         ...getAuthHeader()
       }
     });
-    if (!response.ok) throw new Error('Failed to activate election');
-    return response.json();
+    return parseOrThrow(response, 'Failed to activate election');
   },
 
   closeElection: async (electionId, force = false) => {
@@ -96,8 +107,7 @@ export const apiService = {
     const response = await fetch(url, {
       headers: { 'Content-Type': 'application/json' }
     });
-    if (!response.ok) throw new Error('Failed to fetch candidates');
-    return response.json();
+    return parseOrThrow(response, 'Failed to fetch candidates');
   },
 
   updateCandidate: async (candidateId, data) => {
@@ -120,8 +130,7 @@ export const apiService = {
         ...getAuthHeader()
       }
     });
-    if (!response.ok) throw new Error('Failed to delete candidate');
-    return response.json();
+    return parseOrThrow(response, 'Failed to delete candidate');
   },
 
   // ==================== VOTING ====================
@@ -179,8 +188,7 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/elections/${electionId}/results`, {
       headers: { 'Content-Type': 'application/json' }
     });
-    if (!response.ok) throw new Error('Failed to fetch results');
-    return response.json();
+    return parseOrThrow(response, 'Failed to fetch results');
   },
 
   getElectionStats: async (electionId) => {
@@ -194,8 +202,7 @@ export const apiService = {
     const response = await fetch(`${API_BASE_URL}/elections/${electionId}/results/${position}`, {
       headers: { 'Content-Type': 'application/json' }
     });
-    if (!response.ok) throw new Error('Failed to fetch position results');
-    return response.json();
+    return parseOrThrow(response, 'Failed to fetch position results');
   },
 
   // ==================== CANDIDATE SELF-SERVICE ====================
@@ -304,8 +311,7 @@ export const apiService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
-    if (!response.ok) throw new Error('Login failed');
-    return response.json();
+    return parseOrThrow(response, 'Login failed');
   },
 
   register: async (data) => {
@@ -314,7 +320,6 @@ export const apiService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    if (!response.ok) throw new Error('Registration failed');
-    return response.json();
+    return parseOrThrow(response, 'Registration failed');
   }
 };
