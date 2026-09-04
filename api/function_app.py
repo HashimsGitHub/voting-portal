@@ -25,6 +25,8 @@ app = func.FunctionApp()
 def debug_verify(req: func.HttpRequest) -> func.HttpResponse:
     """TEMPORARY diagnostic endpoint - remove once the 403 root cause is confirmed."""
     import jwt as jwt_lib
+    import hashlib
+    import socket
     from shared.jwt_utils import JWT_SECRET, JWT_ALGORITHM
 
     token = (req.headers.get('Authorization') or '').replace('Bearer ', '')
@@ -33,8 +35,16 @@ def debug_verify(req: func.HttpRequest) -> func.HttpResponse:
         "algorithm": JWT_ALGORITHM,
         "secret_len": len(JWT_SECRET) if JWT_SECRET else 0,
         "secret_present": bool(JWT_SECRET),
+        "secret_fingerprint": hashlib.sha256(JWT_SECRET.encode()).hexdigest()[:12] if JWT_SECRET else None,
+        "instance_hostname": socket.gethostname(),
         "token_received": bool(token),
     }
+    try:
+        self_signed = jwt_lib.encode({"self_test": True}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        jwt_lib.decode(self_signed, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        info["self_roundtrip"] = "success"
+    except Exception as e:
+        info["self_roundtrip"] = f"failed: {type(e).__name__}: {str(e)}"
     if token:
         try:
             payload = jwt_lib.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
