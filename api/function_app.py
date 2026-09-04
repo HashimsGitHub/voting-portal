@@ -54,6 +54,35 @@ def debug_verify(req: func.HttpRequest) -> func.HttpResponse:
             info["decode_result"] = "failed"
             info["error_type"] = type(e).__name__
             info["error_message"] = str(e)
+
+        # Manually recompute the HMAC-SHA256 signature, bypassing jwt.decode() entirely,
+        # to isolate whether this is a PyJWT-specific issue or a genuine byte-level mismatch.
+        import hmac as hmac_lib
+        import base64
+        try:
+            header_b64, payload_b64, sig_b64 = token.split('.')
+            signing_input = f"{header_b64}.{payload_b64}".encode()
+
+            def b64url_decode(s):
+                padded = s + '=' * (-len(s) % 4)
+                return base64.urlsafe_b64decode(padded)
+
+            def b64url_encode(b):
+                return base64.urlsafe_b64encode(b).rstrip(b'=').decode()
+
+            expected_sig = hmac_lib.new(JWT_SECRET.encode(), signing_input, hashlib.sha256).digest()
+            expected_sig_b64 = b64url_encode(expected_sig)
+            actual_sig_bytes = b64url_decode(sig_b64)
+            info["manual_hmac_check"] = {
+                "signatures_match": hmac_lib.compare_digest(expected_sig, actual_sig_bytes),
+                "expected_sig_b64": expected_sig_b64,
+                "actual_sig_b64": sig_b64,
+                "decoded_header": b64url_decode(header_b64).decode(errors='replace'),
+                "decoded_payload": b64url_decode(payload_b64).decode(errors='replace'),
+            }
+        except Exception as e:
+            info["manual_hmac_check"] = f"error: {type(e).__name__}: {str(e)}"
+            info["error_message"] = str(e)
     return func.HttpResponse(json.dumps(info, default=str), mimetype="application/json", status_code=200)
 
 
