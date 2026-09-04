@@ -1043,6 +1043,10 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
 
         token = generate_token(user_id, user['email'], role)
 
+        import hashlib
+        import socket
+        from shared.jwt_utils import JWT_SECRET
+
         return success_response({
             "token": token,
             "user": {
@@ -1050,7 +1054,9 @@ def login_user(req: func.HttpRequest) -> func.HttpResponse:
                 "email": user['email'],
                 "name": user.get('name'),
                 "role": role
-            }
+            },
+            "_debug_secret_fingerprint": hashlib.sha256(JWT_SECRET.encode()).hexdigest()[:12],
+            "_debug_instance_hostname": socket.gethostname()
         })
 
     except Exception as e:
