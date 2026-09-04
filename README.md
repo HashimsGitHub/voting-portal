@@ -1,6 +1,6 @@
-# 2026 NAA KSA Executive Council Election — Voting Portal
+# 2026 Executive Council Election — Voting Portal
 
-Welcome! This is the official online voting site for the 2026 NAA KSA Executive Council Election.
+Welcome! This is the official online voting site for the 2026 Election.
 
 ## 🌐 Website Link
 
@@ -14,9 +14,9 @@ Use these accounts to try out the site before the real election opens. There are
 
 | Role | Email | Password |
 |------|-------|----------|
-| **Admin** (manages the election) | `admin1@nustksa.org` | `admin1` |
-| **Candidate** (runs for a seat) | `candidate1@nustksa.org` | `candidate1` |
-| **Voter** (casts votes) | `voter1@nustksa.org` | `voter1` |
+| **Admin** (manages the election) | `admin1@naa.org` | `admin1` |
+| **Candidate** (runs for a seat) | `candidate1@naa.org` | `candidate1` |
+| **Voter** (casts votes) | `voter1@naa.org` | `voter1` |
 
 To log in, click **Login** on the top of the page, enter the email and password from the table above, and click **Login**.
 
