@@ -19,6 +19,34 @@ from shared.storage_client import StorageClient
 
 app = func.FunctionApp()
 
+
+@app.function_name(name="DebugVerify")
+@app.route(route="_debug/verify", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)
+def debug_verify(req: func.HttpRequest) -> func.HttpResponse:
+    """TEMPORARY diagnostic endpoint - remove once the 403 root cause is confirmed."""
+    import jwt as jwt_lib
+    from shared.jwt_utils import JWT_SECRET, JWT_ALGORITHM
+
+    token = (req.headers.get('Authorization') or '').replace('Bearer ', '')
+    info = {
+        "pyjwt_version": getattr(jwt_lib, "__version__", "unknown"),
+        "algorithm": JWT_ALGORITHM,
+        "secret_len": len(JWT_SECRET) if JWT_SECRET else 0,
+        "secret_present": bool(JWT_SECRET),
+        "token_received": bool(token),
+    }
+    if token:
+        try:
+            payload = jwt_lib.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            info["decode_result"] = "success"
+            info["payload"] = payload
+        except Exception as e:
+            info["decode_result"] = "failed"
+            info["error_type"] = type(e).__name__
+            info["error_message"] = str(e)
+    return func.HttpResponse(json.dumps(info, default=str), mimetype="application/json", status_code=200)
+
+
 # Initialize repository and service
 MONGO_CONNECTION_STRING = os.getenv('MONGODB_CONNECTION_STRING')
 if not MONGO_CONNECTION_STRING:
