@@ -51,6 +51,17 @@ export const apiService = {
     return response.json();
   },
 
+  openNominations: async (electionId) => {
+    const response = await fetch(`${API_BASE_URL}/elections/${electionId}/open-nominations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader()
+      }
+    });
+    return response.json();
+  },
+
   activateElection: async (electionId) => {
     const response = await fetch(`${API_BASE_URL}/elections/${electionId}/activate`, {
       method: 'POST',
@@ -63,15 +74,15 @@ export const apiService = {
     return response.json();
   },
 
-  closeElection: async (electionId) => {
+  closeElection: async (electionId, force = false) => {
     const response = await fetch(`${API_BASE_URL}/elections/${electionId}/close`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeader()
-      }
+      },
+      body: JSON.stringify({ force })
     });
-    if (!response.ok) throw new Error('Failed to close election');
     return response.json();
   },
 
@@ -89,16 +100,15 @@ export const apiService = {
     return response.json();
   },
 
-  addCandidate: async (electionId, data) => {
-    const response = await fetch(`${API_BASE_URL}/elections/${electionId}/candidates`, {
-      method: 'POST',
+  updateCandidate: async (candidateId, data) => {
+    const response = await fetch(`${API_BASE_URL}/candidates/${candidateId}`, {
+      method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeader()
       },
       body: JSON.stringify(data)
     });
-    if (!response.ok) throw new Error('Failed to add candidate');
     return response.json();
   },
 
@@ -116,16 +126,50 @@ export const apiService = {
 
   // ==================== VOTING ====================
   
-  castVote: async (electionId, candidateId) => {
+  castVote: async (electionId, candidateId, position) => {
     const response = await fetch(`${API_BASE_URL}/elections/${electionId}/vote`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeader()
       },
-      body: JSON.stringify({ candidate_id: candidateId })
+      body: JSON.stringify({ candidate_id: candidateId, position })
     });
-    if (!response.ok) throw new Error('Failed to cast vote');
+    return response.json();
+  },
+
+  // ==================== POSITIONS (SEATS) ====================
+
+  getPositions: async (electionId) => {
+    const response = await fetch(`${API_BASE_URL}/elections/${electionId}/positions`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response.json();
+  },
+
+  createPosition: async (electionId, data) => {
+    const response = await fetch(`${API_BASE_URL}/elections/${electionId}/positions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  },
+
+  updatePosition: async (positionId, data) => {
+    const response = await fetch(`${API_BASE_URL}/positions/${positionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  },
+
+  deletePosition: async (positionId) => {
+    const response = await fetch(`${API_BASE_URL}/positions/${positionId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+    });
     return response.json();
   },
 
@@ -139,11 +183,116 @@ export const apiService = {
     return response.json();
   },
 
+  getElectionStats: async (electionId) => {
+    const response = await fetch(`${API_BASE_URL}/elections/${electionId}/stats`, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return response.json();
+  },
+
   getPositionResults: async (electionId, position) => {
     const response = await fetch(`${API_BASE_URL}/elections/${electionId}/results/${position}`, {
       headers: { 'Content-Type': 'application/json' }
     });
     if (!response.ok) throw new Error('Failed to fetch position results');
+    return response.json();
+  },
+
+  // ==================== CANDIDATE SELF-SERVICE ====================
+
+  getMyCandidateProfile: async () => {
+    const response = await fetch(`${API_BASE_URL}/candidates/me`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader()
+      }
+    });
+    // Backend returns a JSON body with success:false + error even on 401/403/404 -
+    // let the caller read that instead of masking it with a generic message.
+    return response.json();
+  },
+
+  updateMyCandidateProfile: async (data) => {
+    const response = await fetch(`${API_BASE_URL}/candidates/me`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader()
+      },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  },
+
+  uploadMyCandidatePhoto: async (imageBase64, contentType) => {
+    const response = await fetch(`${API_BASE_URL}/candidates/me/photo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader()
+      },
+      body: JSON.stringify({ image_base64: imageBase64, content_type: contentType })
+    });
+    return response.json();
+  },
+
+  uploadMyCampaignMedia: async (mediaBase64, contentType) => {
+    const response = await fetch(`${API_BASE_URL}/candidates/me/media`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader()
+      },
+      body: JSON.stringify({ media_base64: mediaBase64, content_type: contentType })
+    });
+    return response.json();
+  },
+
+  deleteMyCampaignMedia: async (url) => {
+    const response = await fetch(`${API_BASE_URL}/candidates/me/media`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader()
+      },
+      body: JSON.stringify({ url })
+    });
+    return response.json();
+  },
+
+  // ==================== USER (VOTER) MANAGEMENT ====================
+
+  getUsers: async (role = null) => {
+    const url = role ? `${API_BASE_URL}/users?role=${role}` : `${API_BASE_URL}/users`;
+    const response = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+    });
+    return response.json();
+  },
+
+  createUser: async (data) => {
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  },
+
+  updateUser: async (userId, data) => {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  },
+
+  deleteUser: async (userId) => {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+    });
     return response.json();
   },
 

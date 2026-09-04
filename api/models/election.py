@@ -16,28 +16,38 @@ class ElectionStatus(str, Enum):
 
 class Candidate:
     """Candidate model for elections"""
-    def __init__(self, 
+    def __init__(self,
                  name: str,
-                 position: str,
+                 positions: List[str],
                  bio: str,
                  image_url: Optional[str] = None,
                  batch_year: Optional[int] = None,
                  department: Optional[str] = None,
                  contact_email: Optional[str] = None,
                  platform: Optional[str] = None,
+                 profile_url: Optional[str] = None,
+                 linkedin_url: Optional[str] = None,
+                 social_url: Optional[str] = None,
+                 campaign_media: Optional[List[dict]] = None,
+                 user_id: Optional[str] = None,
                  election_id: Optional[str] = None,
                  _id: Optional[str] = None,
                  created_at: Optional[datetime] = None,
                  updated_at: Optional[datetime] = None):
         self._id = _id or str(ObjectId())
         self.name = name
-        self.position = position
+        self.positions = positions or []
         self.bio = bio
         self.image_url = image_url
         self.batch_year = batch_year
         self.department = department
-        self.contact_email = contact_email
+        self.contact_email = contact_email.strip().lower() if contact_email else contact_email
         self.platform = platform
+        self.profile_url = profile_url
+        self.linkedin_url = linkedin_url
+        self.social_url = social_url
+        self.campaign_media = campaign_media or []
+        self.user_id = user_id
         self.election_id = election_id
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
@@ -47,13 +57,18 @@ class Candidate:
         return {
             "_id": self._id,
             "name": self.name,
-            "position": self.position,
+            "positions": self.positions,
             "bio": self.bio,
             "image_url": self.image_url,
             "batch_year": self.batch_year,
             "department": self.department,
             "contact_email": self.contact_email,
             "platform": self.platform,
+            "profile_url": self.profile_url,
+            "linkedin_url": self.linkedin_url,
+            "social_url": self.social_url,
+            "campaign_media": self.campaign_media,
+            "user_id": self.user_id,
             "election_id": self.election_id,
             "vote_count": self.vote_count,
             "created_at": self.created_at,
@@ -64,13 +79,18 @@ class Candidate:
     def from_dict(data: dict):
         return Candidate(
             name=data.get("name"),
-            position=data.get("position"),
+            positions=data.get("positions", []),
             bio=data.get("bio"),
             image_url=data.get("image_url"),
             batch_year=data.get("batch_year"),
             department=data.get("department"),
             contact_email=data.get("contact_email"),
             platform=data.get("platform"),
+            profile_url=data.get("profile_url"),
+            linkedin_url=data.get("linkedin_url"),
+            social_url=data.get("social_url"),
+            campaign_media=data.get("campaign_media"),
+            user_id=data.get("user_id"),
             election_id=data.get("election_id"),
             _id=str(data.get("_id", ObjectId())),
             created_at=data.get("created_at", datetime.utcnow()),

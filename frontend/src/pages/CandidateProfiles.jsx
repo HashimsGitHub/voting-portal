@@ -24,8 +24,8 @@ const CandidateProfiles = ({ voting = false }) => {
       const allCandidates = response.candidates || [];
       setCandidates(allCandidates);
 
-      // Extract unique positions
-      const uniquePositions = [...new Set(allCandidates.map(c => c.position))];
+      // Extract unique positions across all candidates (a candidate can run for up to 3)
+      const uniquePositions = [...new Set(allCandidates.flatMap(c => c.positions || []))];
       setPositions(uniquePositions);
       if (uniquePositions.length > 0) {
         setSelectedPosition(uniquePositions[0]);
@@ -41,12 +41,16 @@ const CandidateProfiles = ({ voting = false }) => {
   };
 
   const handleVote = async (candidateId, candidateName) => {
-    if (!window.confirm(`Vote for ${candidateName}?`)) {
+    if (!selectedPosition) {
+      alert('Please select a position first');
+      return;
+    }
+    if (!window.confirm(`Vote for ${candidateName} for ${selectedPosition}?`)) {
       return;
     }
 
     try {
-      const response = await apiService.castVote(electionId, candidateId);
+      const response = await apiService.castVote(electionId, candidateId, selectedPosition);
       if (response.success) {
         setVotedCandidates(prev => ({
           ...prev,
@@ -64,7 +68,7 @@ const CandidateProfiles = ({ voting = false }) => {
   };
 
   const filteredCandidates = selectedPosition
-    ? candidates.filter(c => c.position === selectedPosition)
+    ? candidates.filter(c => (c.positions || []).includes(selectedPosition))
     : candidates;
 
   if (loading) {
@@ -117,7 +121,7 @@ const CandidateProfiles = ({ voting = false }) => {
               
               <div className="candidate-content">
                 <h2>{candidate.name}</h2>
-                <p className="candidate-position">{candidate.position}</p>
+                <p className="candidate-position">{(candidate.positions || []).join(', ')}</p>
 
                 {candidate.batch_year && (
                   <p className="candidate-detail">
@@ -166,6 +170,37 @@ const CandidateProfiles = ({ voting = false }) => {
                       Contact: {candidate.contact_email}
                     </a>
                   </p>
+                )}
+
+                {candidate.linkedin_url && (
+                  <p className="candidate-email">
+                    <a href={candidate.linkedin_url} target="_blank" rel="noopener noreferrer">
+                      LinkedIn Profile
+                    </a>
+                  </p>
+                )}
+
+                {candidate.social_url && (
+                  <p className="candidate-email">
+                    <a href={candidate.social_url} target="_blank" rel="noopener noreferrer">
+                      Social Media
+                    </a>
+                  </p>
+                )}
+
+                {candidate.campaign_media && candidate.campaign_media.length > 0 && (
+                  <div className="candidate-campaign-media">
+                    <h4>Campaign Media</h4>
+                    <div className="candidate-campaign-media-grid">
+                      {candidate.campaign_media.map((item) => (
+                        item.media_type === 'video' ? (
+                          <video key={item.url} src={item.url} controls />
+                        ) : (
+                          <img key={item.url} src={item.url} alt="Campaign media" />
+                        )
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

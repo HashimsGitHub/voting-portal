@@ -23,6 +23,7 @@ class ElectionRepository:
             self.candidates_collection: Collection = self.db['candidates']
             self.votes_collection: Collection = self.db['votes']
             self.voting_records_collection: Collection = self.db['voting_records']
+            self.positions_collection: Collection = self.db['positions']
             
             # Create indexes for better query performance
             self._create_indexes()
@@ -40,17 +41,20 @@ class ElectionRepository:
             
             # Candidates indexes
             self.candidates_collection.create_index("election_id")
-            self.candidates_collection.create_index("position")
-            self.candidates_collection.create_index([("election_id", 1), ("position", 1)])
-            
-            # Votes indexes
+            self.candidates_collection.create_index("positions")
+            self.candidates_collection.create_index([("election_id", 1), ("positions", 1)])
+
+            # Votes indexes - a voter may cast one vote per position/seat
             self.votes_collection.create_index("election_id")
             self.votes_collection.create_index("candidate_id")
             self.votes_collection.create_index("voter_id")
-            self.votes_collection.create_index([("election_id", 1), ("voter_id", 1)], unique=True)
-            
+            self.votes_collection.create_index([("election_id", 1), ("voter_id", 1), ("position", 1)], unique=True)
+
             # Voting records indexes
-            self.voting_records_collection.create_index([("election_id", 1), ("voter_id", 1)], unique=True)
+            self.voting_records_collection.create_index([("election_id", 1), ("voter_id", 1)])
+
+            # Positions indexes
+            self.positions_collection.create_index("election_id")
             
             logger.info("Indexes created successfully")
         except Exception as e:
@@ -149,11 +153,11 @@ class ElectionRepository:
             return []
 
     def get_candidates_by_position(self, election_id: str, position: str) -> List[Dict]:
-        """Get candidates for a specific position"""
+        """Get candidates running for a specific position/seat"""
         try:
             candidates = list(self.candidates_collection.find({
                 "election_id": election_id,
-                "position": position
+                "positions": position
             }))
             # Enrich with vote counts
             for candidate in candidates:
@@ -163,6 +167,14 @@ class ElectionRepository:
         except Exception as e:
             logger.error(f"Error getting candidates by position: {str(e)}")
             return []
+
+    def get_candidate_by_user_id(self, user_id: str) -> Optional[Dict]:
+        """Find the candidate profile that extends a candidate user account"""
+        try:
+            return self.candidates_collection.find_one({"user_id": user_id})
+        except Exception as e:
+            logger.error(f"Error getting candidate by user_id: {str(e)}")
+            return None
 
     def update_candidate(self, candidate_id: str, update_data: Dict[str, Any]) -> bool:
         """Update a candidate"""
@@ -175,6 +187,36 @@ class ElectionRepository:
             return result.modified_count > 0
         except Exception as e:
             logger.error(f"Error updating candidate: {str(e)}")
+            return False
+
+    def add_campaign_media(self, candidate_id: str, media_item: Dict[str, Any]) -> bool:
+        """Append a campaign image/video to a candidate's media gallery"""
+        try:
+            result = self.candidates_collection.update_one(
+                {"_id": ObjectId(candidate_id)},
+                {
+                    "$push": {"campaign_media": media_item},
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Error adding campaign media: {str(e)}")
+            return False
+
+    def remove_campaign_media(self, candidate_id: str, media_url: str) -> bool:
+        """Remove a campaign image/video from a candidate's media gallery"""
+        try:
+            result = self.candidates_collection.update_one(
+                {"_id": ObjectId(candidate_id)},
+                {
+                    "$pull": {"campaign_media": {"url": media_url}},
+                    "$set": {"updated_at": datetime.utcnow()}
+                }
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Error removing campaign media: {str(e)}")
             return False
 
     def delete_candidate(self, candidate_id: str) -> bool:
@@ -190,107 +232,164 @@ class ElectionRepository:
 
     # ==================== VOTING OPERATIONS ====================
     
-    def cast_vote(self, election_id: str, candidate_id: str, voter_id: str, voter_email: str) -> bool:
-        """Record a vote"""
+    def cast_vote(self, election_id: str, candidate_id: str, voter_id: str, voter_email: str, position: str) -> bool:
+        """Record a vote for a candidate in a specific position/seat"""
         try:
             vote_data = {
                 "election_id": election_id,
                 "candidate_id": candidate_id,
                 "voter_id": voter_id,
                 "voter_email": voter_email,
+                "position": position,
                 "created_at": datetime.utcnow()
             }
             self.votes_collection.insert_one(vote_data)
-            
+
             # Update voting record
             self.voting_records_collection.update_one(
                 {"election_id": election_id, "voter_id": voter_id},
                 {
                     "$set": {
                         "has_voted": True,
-                        "voted_at": datetime.utcnow()
+                        "voted_at": datetime.utcnow(),
+                        "voter_email": voter_email
                     }
-                }
+                },
+                upsert=True
             )
-            
-            logger.info(f"Vote recorded for candidate {candidate_id}")
+
+            logger.info(f"Vote recorded for candidate {candidate_id} ({position})")
             return True
         except Exception as e:
             logger.error(f"Error casting vote: {str(e)}")
             raise
 
-    def has_voter_voted(self, election_id: str, voter_id: str) -> bool:
-        """Check if a voter has already voted"""
+    def has_voter_voted(self, election_id: str, voter_id: str, position: str) -> bool:
+        """Check if a voter has already voted for a given position/seat"""
         try:
             vote = self.votes_collection.find_one({
                 "election_id": election_id,
-                "voter_id": voter_id
+                "voter_id": voter_id,
+                "position": position
             })
             return vote is not None
         except Exception as e:
             logger.error(f"Error checking voter status: {str(e)}")
             return False
 
+    # ==================== POSITION (SEAT) OPERATIONS ====================
+
+    def create_position(self, position_data: Dict[str, Any]) -> str:
+        """Create a new position/seat for an election"""
+        try:
+            result = self.positions_collection.insert_one(position_data)
+            logger.info(f"Position created: {result.inserted_id}")
+            return str(result.inserted_id)
+        except Exception as e:
+            logger.error(f"Error creating position: {str(e)}")
+            raise
+
+    def get_positions_by_election(self, election_id: str) -> List[Dict]:
+        """Get all positions/seats for an election"""
+        try:
+            return list(self.positions_collection.find({"election_id": election_id}).sort("name", 1))
+        except Exception as e:
+            logger.error(f"Error getting positions: {str(e)}")
+            return []
+
+    def get_position(self, position_id: str) -> Optional[Dict]:
+        """Get a position by ID"""
+        try:
+            return self.positions_collection.find_one({"_id": ObjectId(position_id)})
+        except Exception as e:
+            logger.error(f"Error getting position: {str(e)}")
+            return None
+
+    def update_position(self, position_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update a position/seat"""
+        try:
+            result = self.positions_collection.update_one(
+                {"_id": ObjectId(position_id)},
+                {"$set": update_data}
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            logger.error(f"Error updating position: {str(e)}")
+            return False
+
+    def delete_position(self, position_id: str) -> bool:
+        """Delete a position/seat"""
+        try:
+            result = self.positions_collection.delete_one({"_id": ObjectId(position_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"Error deleting position: {str(e)}")
+            return False
+
     def get_election_results(self, election_id: str) -> Dict[str, Any]:
-        """Get election results with vote counts per candidate"""
+        """Get election results with vote counts per candidate, broken out by position/seat"""
         try:
             candidates = self.get_candidates_by_election(election_id)
             total_votes = self.votes_collection.count_documents({"election_id": election_id})
-            
+
             results = {
                 "election_id": election_id,
                 "total_votes": total_votes,
                 "candidates": []
             }
-            
+
             for candidate in candidates:
                 candidate_id = str(candidate["_id"])
-                vote_count = self.votes_collection.count_documents({
-                    "election_id": election_id,
-                    "candidate_id": candidate_id
-                })
-                
-                results["candidates"].append({
-                    "candidate_id": candidate_id,
-                    "name": candidate.get("name"),
-                    "position": candidate.get("position"),
-                    "bio": candidate.get("bio"),
-                    "image_url": candidate.get("image_url"),
-                    "vote_count": vote_count,
-                    "vote_percentage": (vote_count / total_votes * 100) if total_votes > 0 else 0
-                })
-            
+                for position in (candidate.get("positions") or [None]):
+                    vote_query = {"election_id": election_id, "candidate_id": candidate_id}
+                    if position:
+                        vote_query["position"] = position
+                    vote_count = self.votes_collection.count_documents(vote_query)
+
+                    results["candidates"].append({
+                        "candidate_id": candidate_id,
+                        "name": candidate.get("name"),
+                        "position": position,
+                        "bio": candidate.get("bio"),
+                        "image_url": candidate.get("image_url"),
+                        "vote_count": vote_count,
+                        "vote_percentage": (vote_count / total_votes * 100) if total_votes > 0 else 0
+                    })
+
             # Sort by vote count
             results["candidates"].sort(key=lambda x: x["vote_count"], reverse=True)
-            
+
             return results
         except Exception as e:
             logger.error(f"Error getting results: {str(e)}")
             return {"error": str(e)}
 
     def get_position_results(self, election_id: str, position: str) -> Dict[str, Any]:
-        """Get results for a specific position"""
+        """Get results for a specific position/seat"""
         try:
             candidates = self.get_candidates_by_position(election_id, position)
+            candidate_ids = [str(c["_id"]) for c in candidates]
             total_votes = self.votes_collection.count_documents({
                 "election_id": election_id,
-                "candidate_id": {"$in": [str(c["_id"]) for c in candidates]}
+                "position": position,
+                "candidate_id": {"$in": candidate_ids}
             })
-            
+
             results = {
                 "election_id": election_id,
                 "position": position,
                 "total_votes": total_votes,
                 "candidates": []
             }
-            
+
             for candidate in candidates:
                 candidate_id = str(candidate["_id"])
                 vote_count = self.votes_collection.count_documents({
                     "election_id": election_id,
-                    "candidate_id": candidate_id
+                    "candidate_id": candidate_id,
+                    "position": position
                 })
-                
+
                 results["candidates"].append({
                     "candidate_id": candidate_id,
                     "name": candidate.get("name"),
@@ -299,9 +398,9 @@ class ElectionRepository:
                     "vote_count": vote_count,
                     "vote_percentage": (vote_count / total_votes * 100) if total_votes > 0 else 0
                 })
-            
+
             results["candidates"].sort(key=lambda x: x["vote_count"], reverse=True)
-            
+
             return results
         except Exception as e:
             logger.error(f"Error getting position results: {str(e)}")

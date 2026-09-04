@@ -8,6 +8,7 @@ import ElectionDetail from './pages/ElectionDetail';
 import CandidateProfiles from './pages/CandidateProfiles';
 import LiveResults from './pages/LiveResults';
 import AdminDashboard from './pages/AdminDashboard';
+import CandidateProfile from './pages/CandidateProfile';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -71,13 +72,21 @@ function App() {
               path="/elections/:electionId/results" 
               element={<LiveResults />} 
             />
-            <Route 
-              path="/admin" 
+            <Route
+              path="/admin"
               element={
                 <PrivateRoute user={user} requiredRole="admin">
                   <AdminDashboard />
                 </PrivateRoute>
-              } 
+              }
+            />
+            <Route
+              path="/candidate/profile"
+              element={
+                <PrivateRoute user={user} requiredRole="candidate">
+                  <CandidateProfile />
+                </PrivateRoute>
+              }
             />
             <Route path="/" element={<Navigate to="/elections" />} />
           </Routes>
