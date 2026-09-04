@@ -55,7 +55,6 @@ class Candidate:
 
     def to_dict(self):
         return {
-            "_id": self._id,
             "name": self.name,
             "positions": self.positions,
             "bio": self.bio,
@@ -122,7 +121,6 @@ class Election:
 
     def to_dict(self):
         return {
-            "_id": self._id,
             "title": self.title,
             "description": self.description,
             "status": self.status.value if isinstance(self.status, ElectionStatus) else self.status,
@@ -170,7 +168,6 @@ class Vote:
 
     def to_dict(self):
         return {
-            "_id": self._id,
             "election_id": self.election_id,
             "candidate_id": self.candidate_id,
             "voter_id": self.voter_id,
@@ -208,7 +205,6 @@ class VotingRecord:
 
     def to_dict(self):
         return {
-            "_id": self._id,
             "election_id": self.election_id,
             "voter_id": self.voter_id,
             "voter_email": self.voter_email,

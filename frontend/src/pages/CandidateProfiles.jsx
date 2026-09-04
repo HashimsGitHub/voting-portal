@@ -9,8 +9,9 @@ const CandidateProfiles = ({ voting = false }) => {
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedPosition, setSelectedPosition] = useState(null);
-  const [votedCandidates, setVotedCandidates] = useState({});
+  const [filterPosition, setFilterPosition] = useState(null);
+  const [voteChoice, setVoteChoice] = useState({});
+  const [votedPositions, setVotedPositions] = useState({});
   const [positions, setPositions] = useState([]);
 
   useEffect(() => {
@@ -27,9 +28,15 @@ const CandidateProfiles = ({ voting = false }) => {
       // Extract unique positions across all candidates (a candidate can run for up to 3)
       const uniquePositions = [...new Set(allCandidates.flatMap(c => c.positions || []))];
       setPositions(uniquePositions);
-      if (uniquePositions.length > 0) {
-        setSelectedPosition(uniquePositions[0]);
-      }
+
+      // Default each candidate's vote choice to the first seat they're running for
+      const defaults = {};
+      allCandidates.forEach(c => {
+        if (c.positions && c.positions.length > 0) {
+          defaults[c._id] = c.positions[0];
+        }
+      });
+      setVoteChoice(defaults);
 
       setError(null);
     } catch (err) {
@@ -41,23 +48,23 @@ const CandidateProfiles = ({ voting = false }) => {
   };
 
   const handleVote = async (candidateId, candidateName) => {
-    if (!selectedPosition) {
-      alert('Please select a position first');
+    const position = voteChoice[candidateId];
+    if (!position) {
+      alert('This candidate has not been assigned a seat yet');
       return;
     }
-    if (!window.confirm(`Vote for ${candidateName} for ${selectedPosition}?`)) {
+    if (!window.confirm(`Vote for ${candidateName} for ${position}?`)) {
       return;
     }
 
     try {
-      const response = await apiService.castVote(electionId, candidateId, selectedPosition);
+      const response = await apiService.castVote(electionId, candidateId, position);
       if (response.success) {
-        setVotedCandidates(prev => ({
+        setVotedPositions(prev => ({
           ...prev,
-          [selectedPosition]: candidateId
+          [position]: candidateId
         }));
         alert(`Vote recorded for ${candidateName}!`);
-        // Optionally navigate to results after voting
         setTimeout(() => navigate(`/elections/${electionId}/results`), 1500);
       } else {
         alert(`Error: ${response.error}`);
@@ -67,8 +74,8 @@ const CandidateProfiles = ({ voting = false }) => {
     }
   };
 
-  const filteredCandidates = selectedPosition
-    ? candidates.filter(c => (c.positions || []).includes(selectedPosition))
+  const filteredCandidates = filterPosition
+    ? candidates.filter(c => (c.positions || []).includes(filterPosition))
     : candidates;
 
   if (loading) {
@@ -86,15 +93,21 @@ const CandidateProfiles = ({ voting = false }) => {
         <div className="error-message">{error}</div>
       )}
 
-      {positions.length > 1 && (
+      {positions.length > 0 && (
         <div className="position-filter">
-          <h3>Select Position:</h3>
+          <h3>Filter by Seat:</h3>
           <div className="position-buttons">
+            <button
+              className={`position-btn ${filterPosition === null ? 'active' : ''}`}
+              onClick={() => setFilterPosition(null)}
+            >
+              All Seats
+            </button>
             {positions.map(position => (
               <button
                 key={position}
-                className={`position-btn ${selectedPosition === position ? 'active' : ''}`}
-                onClick={() => setSelectedPosition(position)}
+                className={`position-btn ${filterPosition === position ? 'active' : ''}`}
+                onClick={() => setFilterPosition(position)}
               >
                 {position}
               </button>
@@ -105,106 +118,128 @@ const CandidateProfiles = ({ voting = false }) => {
 
       {filteredCandidates.length === 0 ? (
         <div className="no-candidates">
-          <p>No candidates found for this position</p>
+          <p>No candidates found for this seat</p>
         </div>
       ) : (
         <div className="candidates-grid">
-          {filteredCandidates.map(candidate => (
-            <div key={candidate._id} className="candidate-card">
-              {candidate.image_url && (
-                <img 
-                  src={candidate.image_url} 
-                  alt={candidate.name}
-                  className="candidate-image"
-                />
-              )}
-              
-              <div className="candidate-content">
-                <h2>{candidate.name}</h2>
-                <p className="candidate-position">{(candidate.positions || []).join(', ')}</p>
+          {filteredCandidates.map(candidate => {
+            const candidatePositions = candidate.positions || [];
+            const hasSeat = candidatePositions.length > 0;
+            const chosenPosition = voteChoice[candidate._id];
+            const alreadyVotedForChoice = chosenPosition && votedPositions[chosenPosition] === candidate._id;
 
-                {candidate.batch_year && (
-                  <p className="candidate-detail">
-                    <strong>Batch:</strong> {candidate.batch_year}
-                  </p>
+            return (
+              <div key={candidate._id} className="candidate-card">
+                {candidate.image_url && (
+                  <img
+                    src={candidate.image_url}
+                    alt={candidate.name}
+                    className="candidate-image"
+                  />
                 )}
 
-                {candidate.department && (
-                  <p className="candidate-detail">
-                    <strong>Department:</strong> {candidate.department}
+                <div className="candidate-content">
+                  <h2>{candidate.name}</h2>
+                  <p className="candidate-position">
+                    {hasSeat ? candidatePositions.join(', ') : 'No seat assigned yet'}
                   </p>
-                )}
 
-                <div className="candidate-bio">
-                  <h4>About</h4>
-                  <p>{candidate.bio}</p>
-                </div>
+                  {candidate.batch_year && (
+                    <p className="candidate-detail">
+                      <strong>Batch:</strong> {candidate.batch_year}
+                    </p>
+                  )}
 
-                {candidate.platform && (
-                  <div className="candidate-platform">
-                    <h4>Platform</h4>
-                    <p>{candidate.platform}</p>
+                  {candidate.department && (
+                    <p className="candidate-detail">
+                      <strong>Department:</strong> {candidate.department}
+                    </p>
+                  )}
+
+                  <div className="candidate-bio">
+                    <h4>About</h4>
+                    <p>{candidate.bio}</p>
                   </div>
-                )}
 
-                <div className="candidate-stats">
-                  <div className="stat">
-                    <span className="stat-value">{candidate.vote_count}</span>
-                    <span className="stat-label">Votes</span>
-                  </div>
-                </div>
+                  {candidate.platform && (
+                    <div className="candidate-platform">
+                      <h4>Platform</h4>
+                      <p>{candidate.platform}</p>
+                    </div>
+                  )}
 
-                {voting ? (
-                  <button
-                    className={`btn-vote-large ${votedCandidates[selectedPosition] === candidate._id ? 'voted' : ''}`}
-                    onClick={() => handleVote(candidate._id, candidate.name)}
-                    disabled={votedCandidates[selectedPosition] === candidate._id}
-                  >
-                    {votedCandidates[selectedPosition] === candidate._id ? 'Vote Recorded' : 'Vote for This Candidate'}
-                  </button>
-                ) : null}
-
-                {candidate.contact_email && (
-                  <p className="candidate-email">
-                    <a href={`mailto:${candidate.contact_email}`}>
-                      Contact: {candidate.contact_email}
-                    </a>
-                  </p>
-                )}
-
-                {candidate.linkedin_url && (
-                  <p className="candidate-email">
-                    <a href={candidate.linkedin_url} target="_blank" rel="noopener noreferrer">
-                      LinkedIn Profile
-                    </a>
-                  </p>
-                )}
-
-                {candidate.social_url && (
-                  <p className="candidate-email">
-                    <a href={candidate.social_url} target="_blank" rel="noopener noreferrer">
-                      Social Media
-                    </a>
-                  </p>
-                )}
-
-                {candidate.campaign_media && candidate.campaign_media.length > 0 && (
-                  <div className="candidate-campaign-media">
-                    <h4>Campaign Media</h4>
-                    <div className="candidate-campaign-media-grid">
-                      {candidate.campaign_media.map((item) => (
-                        item.media_type === 'video' ? (
-                          <video key={item.url} src={item.url} controls />
-                        ) : (
-                          <img key={item.url} src={item.url} alt="Campaign media" />
-                        )
-                      ))}
+                  <div className="candidate-stats">
+                    <div className="stat">
+                      <span className="stat-value">{candidate.vote_count}</span>
+                      <span className="stat-label">Votes</span>
                     </div>
                   </div>
-                )}
+
+                  {voting && hasSeat && (
+                    <div className="vote-controls">
+                      {candidatePositions.length > 1 && (
+                        <select
+                          className="vote-position-select"
+                          value={chosenPosition}
+                          onChange={(e) => setVoteChoice(prev => ({ ...prev, [candidate._id]: e.target.value }))}
+                        >
+                          {candidatePositions.map(p => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        className={`btn-vote-large ${alreadyVotedForChoice ? 'voted' : ''}`}
+                        onClick={() => handleVote(candidate._id, candidate.name)}
+                        disabled={alreadyVotedForChoice}
+                      >
+                        {alreadyVotedForChoice ? 'Vote Recorded' : `Vote for ${chosenPosition}`}
+                      </button>
+                    </div>
+                  )}
+
+                  {candidate.contact_email && (
+                    <p className="candidate-email">
+                      <a href={`mailto:${candidate.contact_email}`}>
+                        Contact: {candidate.contact_email}
+                      </a>
+                    </p>
+                  )}
+
+                  {candidate.linkedin_url && (
+                    <p className="candidate-email">
+                      <a href={candidate.linkedin_url} target="_blank" rel="noopener noreferrer">
+                        LinkedIn Profile
+                      </a>
+                    </p>
+                  )}
+
+                  {candidate.social_url && (
+                    <p className="candidate-email">
+                      <a href={candidate.social_url} target="_blank" rel="noopener noreferrer">
+                        Social Media
+                      </a>
+                    </p>
+                  )}
+
+                  {candidate.campaign_media && candidate.campaign_media.length > 0 && (
+                    <div className="candidate-campaign-media">
+                      <h4>Campaign Media</h4>
+                      <div className="candidate-campaign-media-grid">
+                        {candidate.campaign_media.map((item) => (
+                          item.media_type === 'video' ? (
+                            <video key={item.url} src={item.url} controls />
+                          ) : (
+                            <img key={item.url} src={item.url} alt="Campaign media" />
+                          )
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

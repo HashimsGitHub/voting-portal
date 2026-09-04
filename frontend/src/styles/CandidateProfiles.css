@@ -101,6 +101,19 @@
   color: #888;
 }
 
+.vote-controls {
+  margin-top: 1rem;
+}
+
+.vote-position-select {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid var(--medium-gray);
+  border-radius: var(--border-radius);
+  font-size: 0.95rem;
+  background: white;
+}
+
 .btn-vote-large {
   width: 100%;
   padding: 0.9rem;
@@ -111,7 +124,7 @@
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   transition: var(--transition);
 }
 

@@ -338,6 +338,17 @@ class ElectionRepository:
                 "candidates": []
             }
 
+            # Votes per seat, so each candidate's percentage is relative to their own race
+            votes_per_position = {}
+            for candidate in candidates:
+                candidate_id = str(candidate["_id"])
+                for position in (candidate.get("positions") or [None]):
+                    if position not in votes_per_position:
+                        votes_per_position[position] = self.votes_collection.count_documents(
+                            {"election_id": election_id, "position": position} if position
+                            else {"election_id": election_id}
+                        )
+
             for candidate in candidates:
                 candidate_id = str(candidate["_id"])
                 for position in (candidate.get("positions") or [None]):
@@ -345,6 +356,7 @@ class ElectionRepository:
                     if position:
                         vote_query["position"] = position
                     vote_count = self.votes_collection.count_documents(vote_query)
+                    position_total = votes_per_position.get(position, 0)
 
                     results["candidates"].append({
                         "candidate_id": candidate_id,
@@ -353,7 +365,7 @@ class ElectionRepository:
                         "bio": candidate.get("bio"),
                         "image_url": candidate.get("image_url"),
                         "vote_count": vote_count,
-                        "vote_percentage": (vote_count / total_votes * 100) if total_votes > 0 else 0
+                        "vote_percentage": (vote_count / position_total * 100) if position_total > 0 else 0
                     })
 
             # Sort by vote count

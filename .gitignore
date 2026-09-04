@@ -34,8 +34,10 @@ pnpm-debug.log*
 # Editor and operating system files
 .vscode/
 .idea/
+.claude/
 .DS_Store
 Thumbs.db
+*.log
 
 # Local database and generated exports
 *.db

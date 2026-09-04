@@ -460,7 +460,7 @@ def get_candidates(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.function_name(name="UpdateCandidate")
-@app.route(route="candidates/{candidate_id}", methods=["PUT"], auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="candidates/{candidate_id:length(24)}", methods=["PUT"], auth_level=func.AuthLevel.ANONYMOUS)
 def update_candidate(req: func.HttpRequest) -> func.HttpResponse:
     """Update any field on a candidate (Admin only)"""
     try:
@@ -508,7 +508,7 @@ def update_candidate(req: func.HttpRequest) -> func.HttpResponse:
 
 
 @app.function_name(name="DeleteCandidate")
-@app.route(route="candidates/{candidate_id}", methods=["DELETE"], auth_level=func.AuthLevel.ANONYMOUS)
+@app.route(route="candidates/{candidate_id:length(24)}", methods=["DELETE"], auth_level=func.AuthLevel.ANONYMOUS)
 def delete_candidate(req: func.HttpRequest) -> func.HttpResponse:
     """Delete a candidate and its related votes (Admin only)"""
     try:

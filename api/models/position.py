@@ -25,7 +25,6 @@ class Position:
 
     def to_dict(self):
         return {
-            "_id": self._id,
             "name": self.name,
             "election_id": self.election_id,
             "region": self.region,
